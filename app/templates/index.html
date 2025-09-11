@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Volunteer Signup</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Volunteer Signup</h1>
+    <nav>
+      <a href="/admin" class="admin-link">Admin</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <div class="grid" id="signup-grid">
+      <div class="corner cell header"></div>
+      {% for day in days %}
+        <div class="cell header day-header">{{ day }}</div>
+      {% endfor %}
+
+      {% for h in hours %}
+        <div class="cell header time-header">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+        {% for day in days %}
+          {% set is_available = available[day][h] %}
+          {% set spots = remaining[day][h] %}
+          <div class="cell slot-wrapper">
+            <button
+              class="slot {{ 'unavailable' if not is_available else '' }} {{ 'full' if spots == 0 and is_available else '' }}"
+              type="button"
+              data-day="{{ day }}"
+              data-hour="{{ h }}"
+              data-available="{{ 'true' if is_available else 'false' }}"
+              data-remaining="{{ spots }}"
+              aria-disabled="{{ 'true' if (not is_available) or spots == 0 else 'false' }}"
+              title="{{ day }} @ {{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}"
+            >
+              <div class="slot-inner">
+                <div class="time-label">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+                <div class="spots">{{ spots }} left</div>
+              </div>
+            </button>
+            {% set signups = data[day][h] %}
+            {% if signups|length > 0 %}
+              <ul class="signup-list compact">
+                {% for s in signups %}
+                  <li>
+                    <span class="signup-name">{{ s.name }}</span>
+                    <button class="mini danger delete-signup" type="button" data-signup-id="{{ s.id }}" data-day="{{ day }}" data-hour="{{ h }}" title="Delete signup">✕</button>
+                  </li>
+                {% endfor %}
+              </ul>
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </main>
+
+  <!-- No email/phone displayed publicly. -->
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-content">
+      <button class="close" id="modal-close" aria-label="Close">✕</button>
+      <h2 id="modal-title">Sign up</h2>
+      <p id="modal-subtitle"></p>
+      <form id="signup-form" method="post" action="/signup">
+        <input type="hidden" name="day" id="form-day" />
+        <input type="hidden" name="hour" id="form-hour" />
+
+        <div class="field">
+          <label for="form-name">Name</label>
+          <input type="text" id="form-name" name="name" required />
+        </div>
+        <div class="field">
+          <label for="form-email">Email</label>
+          <input type="email" id="form-email" name="email" required />
+        </div>
+        <div class="field">
+          <label for="form-phone">Phone</label>
+          <input type="tel" id="form-phone" name="phone" required />
+        </div>
+        <div class="field">
+          <label for="form-password">Set a password (to manage/delete your signup)</label>
+          <input type="password" id="form-password" name="password" required minlength="4" />
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary">Submit</button>
+          <button type="button" id="modal-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="delete-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-title">
+    <div class="modal-content">
+      <button class="close" id="delete-close" aria-label="Close">✕</button>
+      <h2 id="delete-title">Delete signup</h2>
+      <p id="delete-subtitle"></p>
+      <form id="delete-form" method="post" action="/signup/delete">
+        <input type="hidden" name="signup_id" id="delete-signup-id" />
+        <div class="field">
+          <label for="delete-password">Enter your password to confirm</label>
+          <input type="password" id="delete-password" name="password" required minlength="4" />
+        </div>
+        <div class="actions">
+          <button type="submit" class="primary danger">Delete</button>
+          <button type="button" id="delete-cancel">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

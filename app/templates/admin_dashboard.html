@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <h1>Admin Dashboard</h1>
+    <form method="post" action="/admin/logout">
+      <button class="link" type="submit">Logout</button>
+    </form>
+  </header>
+
+  <main class="container">
+    <div class="grid admin" id="admin-grid">
+      <div class="corner cell header"></div>
+      {% for day in days %}
+        <div class="cell header day-header">{{ day }}</div>
+      {% endfor %}
+      {% for h in hours %}
+        <div class="cell header time-header">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+        {% for day in days %}
+          {% set signups = data[day][h] %}
+          <div class="cell admin-cell">
+            <div class="slot-inner">
+              <div class="time-label">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+              <div class="spots">{{ (capacity - signups|length) if (capacity - signups|length) > 0 else 0 }} left</div>
+              {% if signups|length > 0 %}
+                <ul class="signup-list">
+                  {% for s in signups %}
+                    <li>
+                      <strong>{{ s.name }}</strong>
+                      <div>{{ s.email }}</div>
+                      <div>{{ s.phone }}</div>
+                      <div class="admin-actions">
+                        <form method="post" action="/admin/delete_signup" style="display:inline">
+                          <input type="hidden" name="signup_id" value="{{ s.id }}" />
+                          <button type="submit" class="mini danger">Delete</button>
+                        </form>
+                        <form method="post" action="/admin/move_signup" class="move-form">
+                          <input type="hidden" name="signup_id" value="{{ s.id }}" />
+                          <label>
+                            Day
+                            <select name="day">
+                              {% for d in days %}
+                                <option value="{{ d }}" {{ 'selected' if d==day else '' }}>{{ d }}</option>
+                              {% endfor %}
+                            </select>
+                          </label>
+                          <label>
+                            Hour
+                            <select name="hour">
+                              {% for hh in hours %}
+                                <option value="{{ hh }}" {{ 'selected' if hh==h else '' }}>{{ (hh-1)%12 + 1 }} {{ 'AM' if hh < 12 else 'PM' }}</option>
+                              {% endfor %}
+                            </select>
+                          </label>
+                          <button type="submit" class="mini">Move</button>
+                        </form>
+                      </div>
+                    </li>
+                  {% endfor %}
+                </ul>
+              {% else %}
+                <div class="empty">No signups</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
+      {% endfor %}
+    </div>
+  </main>
+</body>
+</html>
