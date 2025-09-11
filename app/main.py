@@ -7,7 +7,7 @@ from typing import Optional, List, Dict
 from passlib.context import CryptContext
 import os
 from dotenv import load_dotenv
-
+# This is a change
 load_dotenv()  # Load environment variables from .env file
 
 app = FastAPI(title="Volunteer Signup")
