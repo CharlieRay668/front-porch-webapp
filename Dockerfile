@@ -15,9 +15,16 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
+
+
 COPY app ./app
+
+# Copy .env over
+COPY .env .env
 
 ENV PORT=8000
 EXPOSE 8000
+
+# Export environment variabl
 
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
