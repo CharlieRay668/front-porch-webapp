@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Volunteer Signup</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
@@ -48,7 +48,6 @@
                 {% for s in signups %}
                   <li>
                     <span class="signup-name">{{ s.name }}</span>
-                    <button class="mini danger delete-signup" type="button" data-signup-id="{{ s.id }}" data-day="{{ day }}" data-hour="{{ h }}" title="Delete signup">✕</button>
                   </li>
                 {% endfor %}
               </ul>
@@ -59,8 +58,7 @@
     </div>
   </main>
 
-  <!-- No email/phone displayed publicly. -->
-
+  <!-- Signup Modal -->
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
     <div class="modal-content">
       <button class="close" id="modal-close" aria-label="Close">✕</button>
@@ -71,43 +69,20 @@
         <input type="hidden" name="hour" id="form-hour" />
 
         <div class="field">
-          <label for="form-name">Name</label>
-          <input type="text" id="form-name" name="name" required />
+          <label for="people-count">How many people?</label>
+          <select id="people-count" name="people_count" required>
+            <option value="1">1</option>
+            <option value="2">2</option>
+            <option value="3">3</option>
+            <option value="4">4</option>
+          </select>
         </div>
-        <div class="field">
-          <label for="form-email">Email</label>
-          <input type="email" id="form-email" name="email" required />
-        </div>
-        <div class="field">
-          <label for="form-phone">Phone</label>
-          <input type="tel" id="form-phone" name="phone" required />
-        </div>
-        <div class="field">
-          <label for="form-password">Set a password (to manage/delete your signup)</label>
-          <input type="password" id="form-password" name="password" required minlength="4" />
-        </div>
-        <div class="actions">
+
+        <div id="people-fields" class="people-fields"></div>
+
+        <div class="actions sticky">
           <button type="submit" class="primary">Submit</button>
           <button type="button" id="modal-cancel">Cancel</button>
-        </div>
-      </form>
-    </div>
-  </div>
-
-  <div id="delete-modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="delete-title">
-    <div class="modal-content">
-      <button class="close" id="delete-close" aria-label="Close">✕</button>
-      <h2 id="delete-title">Delete signup</h2>
-      <p id="delete-subtitle"></p>
-      <form id="delete-form" method="post" action="/signup/delete">
-        <input type="hidden" name="signup_id" id="delete-signup-id" />
-        <div class="field">
-          <label for="delete-password">Enter your password to confirm</label>
-          <input type="password" id="delete-password" name="password" required minlength="4" />
-        </div>
-        <div class="actions">
-          <button type="submit" class="primary danger">Delete</button>
-          <button type="button" id="delete-cancel">Cancel</button>
         </div>
       </form>
     </div>

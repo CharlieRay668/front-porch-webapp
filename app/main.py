@@ -35,16 +35,13 @@ AVAILABLE_RULES = {
     "Sunday": set(range(9, 18)),
 }
 
-CAPACITY = 3
+CAPACITY = 4
 
 class Signup(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     day: str
     hour: int
     name: str
-    email: str
-    phone: str
-    password_hash: Optional[str] = None
 
 class Admin(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -61,16 +58,6 @@ def init_db():
             pw_hash = pwd_context.hash(ADMIN_PASSWORD)
             session.add(Admin(username=ADMIN_USERNAME, password_hash=pw_hash))
             session.commit()
-
-    # Ensure password_hash column exists on Signup (SQLite simple migration)
-    with engine.connect() as conn:
-        try:
-            res = conn.exec_driver_sql("PRAGMA table_info(signup)")
-            cols = [row[1] for row in res.fetchall()]
-            if "password_hash" not in cols:
-                conn.exec_driver_sql("ALTER TABLE signup ADD COLUMN password_hash VARCHAR")
-        except Exception:
-            pass
 
 
 @app.on_event("startup")
@@ -104,20 +91,34 @@ async def home(request: Request):
 
 
 @app.post("/signup")
-async def signup(day: str = Form(...), hour: int = Form(...), name: str = Form(...), email: str = Form(...), phone: str = Form(...), password: Optional[str] = Form(None)):
+async def signup(request: Request, day: str = Form(...), hour: int = Form(...), people_count: int = Form(...)):
     if day not in DAYS or hour not in HOURS:
         raise HTTPException(status_code=400, detail="Invalid slot")
     if not hour_available(day, hour):
         raise HTTPException(status_code=400, detail="This slot is not available")
-    if not password or len(password) < 4:
-        raise HTTPException(status_code=400, detail="Password (min 4 chars) is required to manage your signup")
+    if people_count < 1:
+        raise HTTPException(status_code=400, detail="Invalid number of people")
+
+    form_data = await request.form()
+    requested_names: List[str] = []
+    for i in range(1, people_count + 1):
+        fn = str(form_data.get(f"first_name_{i}", "")).strip()
+        ln = str(form_data.get(f"last_name_{i}", "")).strip()
+        full = (fn + " " + ln).strip()
+        if full:
+            requested_names.append(full)
+    if not requested_names:
+        raise HTTPException(status_code=400, detail="At least one name is required")
+
     with Session(engine) as session:
         current = session.exec(select(Signup).where(Signup.day == day, Signup.hour == hour)).all()
-        if len(current) >= CAPACITY:
+        remaining = max(0, CAPACITY - len(current))
+        if remaining <= 0:
             raise HTTPException(status_code=400, detail="This slot is full")
-        pw_hash = pwd_context.hash(password)
-        signup = Signup(day=day, hour=hour, name=name, email=email, phone=phone, password_hash=pw_hash)
-        session.add(signup)
+        # Only allow up to remaining
+        names_to_add = requested_names[:remaining]
+        for nm in names_to_add:
+            session.add(Signup(day=day, hour=hour, name=nm))
         session.commit()
     return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
@@ -166,20 +167,6 @@ async def admin_logout(session_id: Optional[str] = Cookie(default=None)):
     if session_id and session_id in SESSIONS:
         SESSIONS.pop(session_id, None)
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
-
-
-# User self-delete with password
-@app.post("/signup/delete")
-async def delete_signup(signup_id: int = Form(...), password: str = Form(...)):
-    with Session(engine) as session:
-        s = session.get(Signup, signup_id)
-        if not s:
-            raise HTTPException(status_code=404, detail="Signup not found")
-        if not s.password_hash or not pwd_context.verify(password, s.password_hash):
-            raise HTTPException(status_code=403, detail="Invalid password")
-        session.delete(s)
-        session.commit()
-    return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # Admin delete without password
