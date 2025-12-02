@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Volunteer Signup</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
+
 <body>
   <header class="topbar">
     <h1>Volunteer Signup</h1>
@@ -15,47 +17,113 @@
   </header>
 
   <main class="container">
-    <div class="grid" id="signup-grid">
+    {% if signup_locked %}
+    <div class="locked-message" style="text-align: center; padding: 50px 20px;">
+      <h2 style="font-size: 2rem; margin-bottom: 20px;">Signups locked</h2>
+      {% if lock_reason %}
+      <p style="font-size: 1.2rem; color: #666;">{{ lock_reason }}</p>
+      {% endif %}
+    </div>
+    {% else %}
+    <!-- Desktop grid -->
+    <div class="grid desktop-only" id="signup-grid">
       <div class="corner cell header"></div>
       {% for day in days %}
-        <div class="cell header day-header">{{ day }}</div>
+      <div class="cell header day-header">{{ day }}</div>
       {% endfor %}
 
       {% for h in hours %}
-        <div class="cell header time-header">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
-        {% for day in days %}
+      <div class="cell header time-header">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+          {% for day in days %}
           {% set is_available = available[day][h] %}
           {% set spots = remaining[day][h] %}
           <div class="cell slot-wrapper">
-            <button
-              class="slot {{ 'unavailable' if not is_available else '' }} {{ 'full' if spots == 0 and is_available else '' }}"
-              type="button"
-              data-day="{{ day }}"
-              data-hour="{{ h }}"
-              data-available="{{ 'true' if is_available else 'false' }}"
-              data-remaining="{{ spots }}"
-              aria-disabled="{{ 'true' if (not is_available) or spots == 0 else 'false' }}"
-              title="{{ day }} @ {{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}"
-            >
-              <div class="slot-inner">
-                <div class="time-label">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
-                <div class="spots">{{ spots }} left</div>
-              </div>
-            </button>
             {% set signups = data[day][h] %}
-            {% if signups|length > 0 %}
-              <ul class="signup-list compact">
-                {% for s in signups %}
-                  <li>
-                    <span class="signup-name">{{ s.name }}</span>
-                  </li>
-                {% endfor %}
-              </ul>
-            {% endif %}
+            <button
+              class="slot{% if not is_available %} unavailable{% endif %}{% if spots == 0 and is_available %} full{% endif %}"
+              type="button" data-day="{{ day }}" data-hour="{{ h }}"
+              data-available="{{ 'true' if is_available else 'false' }}" data-remaining="{{ spots }}"
+              aria-disabled="{{ 'true' if (not is_available) or spots == 0 else 'false' }}"
+              title="{{ day }} @ {{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}">
+              <div class="slot-inner">
+                <div class="slot-header">
+                  <div class="time-label">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+                      <div class="spots">{{ spots }} left</div>
+                  </div>
+                  {% if signups|length > 0 %}
+                  <ul class="signup-list compact">
+                    {% for s in signups %}
+                    <li>
+                      <span class="signup-name">{{ s.name }}</span>
+                    </li>
+                    {% endfor %}
+                  </ul>
+                  {% else %}
+                  <div class="empty in-slot">No signups yet</div>
+                  {% endif %}
+                </div>
+            </button>
           </div>
-        {% endfor %}
-      {% endfor %}
-    </div>
+          {% endfor %}
+          {% endfor %}
+      </div>
+
+      <!-- Mobile view -->
+      <div class="mobile-container">
+        <div class="day-tabs" id="day-tabs" role="tablist" aria-label="Select a volunteer day">
+          {% for day in days %}
+          {% set tab_id = 'day-tab-' ~ loop.index0 %}
+          {% set panel_id = 'day-panel-' ~ loop.index0 %}
+          <button class="day-tab" id="{{ tab_id }}" role="tab" type="button" aria-selected="false" tabindex="-1"
+            aria-controls="{{ panel_id }}" data-day="{{ day }}">{{ day }}</button>
+          {% endfor %}
+        </div>
+
+        <div class="day-panels" id="day-panels">
+          {% for day in days %}
+          {% set panel_index = loop.index0 %}
+          {% set tab_id = 'day-tab-' ~ panel_index %}
+          {% set panel_id = 'day-panel-' ~ panel_index %}
+          <section class="day-panel" data-day="{{ day }}" id="{{ panel_id }}" role="tabpanel"
+            aria-labelledby="{{ tab_id }}" hidden>
+            {% for h in hours %}
+            {% set is_available = available[day][h] %}
+            {% set spots = remaining[day][h] %}
+            {% set signups = data[day][h] %}
+            <article
+              class="slot-card{% if not is_available %} unavailable{% endif %}{% if spots == 0 and is_available %} full{% endif %}">
+              <div class="slot-card-header">
+                <div class="slot-time">{{ (h-1)%12 + 1 }} {{ 'AM' if h < 12 else 'PM' }}</div>
+                    {% if not is_available %}
+                    <span class="badge badge-muted">Unavailable</span>
+                    {% elif spots == 0 %}
+                    <span class="badge badge-warn">Full</span>
+                    {% else %}
+                    <span class="badge">{{ spots }} left</span>
+                    {% endif %}
+                </div>
+                {% if signups|length > 0 %}
+                <ul class="signup-list compact">
+                  {% for s in signups %}
+                  <li><span class="signup-name">{{ s.name }}</span></li>
+                  {% endfor %}
+                </ul>
+                {% else %}
+                <div class="empty">No signups yet</div>
+                {% endif %}
+                <div class="slot-card-actions">
+                  <button class="primary signup-btn" type="button" data-day="{{ day }}" data-hour="{{ h }}"
+                    data-available="{{ 'true' if is_available else 'false' }}" data-remaining="{{ spots }}"
+                    aria-disabled="{{ 'true' if (not is_available) or spots == 0 else 'false' }}" {{ 'disabled' if (not
+                    is_available) or spots==0 else '' }}>Sign up</button>
+                </div>
+            </article>
+            {% endfor %}
+          </section>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
   </main>
 
   <!-- Signup Modal -->
@@ -90,4 +158,5 @@
 
   <script src="/static/app.js"></script>
 </body>
+
 </html>

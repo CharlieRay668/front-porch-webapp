@@ -1,3 +1,5 @@
+from secrets import token_urlsafe
+from fastapi import Cookie
 from fastapi import FastAPI, Request, Depends, HTTPException, status, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -18,14 +20,16 @@ engine = create_engine(
     f"sqlite:///{DB_PATH}", echo=False, connect_args={"check_same_thread": False}
 )
 
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
+app.mount(
+    "/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 ADMIN_USERNAME = os.getenv("ADMIN_USERNAME")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
-DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+DAYS = ["Monday", "Tuesday", "Wednesday",
+        "Thursday", "Friday", "Saturday", "Sunday"]
 HOURS = list(range(7, 24))  # 7 to 23
 
 # Business rules for availability
@@ -37,11 +41,13 @@ AVAILABLE_RULES = {
 
 CAPACITY = 4
 
+
 class Signup(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     day: str
     hour: int
     name: str
+
 
 class Admin(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -49,11 +55,33 @@ class Admin(SQLModel, table=True):
     password_hash: str
 
 
+class AppSettings(SQLModel, table=True):
+    key: str = Field(primary_key=True)
+    value: str
+
+
+def get_setting(session: Session, key: str, default: str = "") -> str:
+    setting = session.get(AppSettings, key)
+    return setting.value if setting else default
+
+
+def set_setting(session: Session, key: str, value: str):
+    setting = session.get(AppSettings, key)
+    if not setting:
+        setting = AppSettings(key=key, value=value)
+        session.add(setting)
+    else:
+        setting.value = value
+        session.add(setting)
+    session.commit()
+
+
 def init_db():
     SQLModel.metadata.create_all(engine)
     # Create default admin if not exists
     with Session(engine) as session:
-        admin = session.exec(select(Admin).where(Admin.username == ADMIN_USERNAME)).first()
+        admin = session.exec(select(Admin).where(
+            Admin.username == ADMIN_USERNAME)).first()
         if not admin:
             pw_hash = pwd_context.hash(ADMIN_PASSWORD)
             session.add(Admin(username=ADMIN_USERNAME, password_hash=pw_hash))
@@ -78,8 +106,14 @@ def hour_available(day: str, hour: int) -> bool:
 async def home(request: Request):
     # Build grid data with remaining slots per cell and current signups
     with Session(engine) as session:
-        available_map: Dict[str, Dict[int, bool]] = {d: {h: hour_available(d, h) for h in HOURS} for d in DAYS}
-        data: Dict[str, Dict[int, List[Signup]]] = {d: {h: [] for h in HOURS} for d in DAYS}
+        signup_locked = get_setting(
+            session, "signup_locked", "false") == "true"
+        lock_reason = get_setting(session, "lock_reason", "")
+
+        available_map: Dict[str, Dict[int, bool]] = {
+            d: {h: hour_available(d, h) for h in HOURS} for d in DAYS}
+        data: Dict[str, Dict[int, List[Signup]]] = {
+            d: {h: [] for h in HOURS} for d in DAYS}
         rows = session.exec(select(Signup)).all()
         for r in rows:
             if r.day in data and r.hour in data[r.day]:
@@ -87,15 +121,31 @@ async def home(request: Request):
         remaining: Dict[str, Dict[int, int]] = {
             d: {h: (CAPACITY if available_map[d][h] else 0) - len(data[d][h]) for h in HOURS} for d in DAYS
         }
-    return templates.TemplateResponse("index.html", {"request": request, "days": DAYS, "hours": HOURS, "remaining": remaining, "available": available_map, "data": data, "capacity": CAPACITY})
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "days": DAYS,
+        "hours": HOURS,
+        "remaining": remaining,
+        "available": available_map,
+        "data": data,
+        "capacity": CAPACITY,
+        "signup_locked": signup_locked,
+        "lock_reason": lock_reason
+    })
 
 
 @app.post("/signup")
 async def signup(request: Request, day: str = Form(...), hour: int = Form(...), people_count: int = Form(...)):
+    with Session(engine) as session:
+        if get_setting(session, "signup_locked", "false") == "true":
+            raise HTTPException(
+                status_code=400, detail="Signups are currently locked.")
+
     if day not in DAYS or hour not in HOURS:
         raise HTTPException(status_code=400, detail="Invalid slot")
     if not hour_available(day, hour):
-        raise HTTPException(status_code=400, detail="This slot is not available")
+        raise HTTPException(
+            status_code=400, detail="This slot is not available")
     if people_count < 1:
         raise HTTPException(status_code=400, detail="Invalid number of people")
 
@@ -108,10 +158,12 @@ async def signup(request: Request, day: str = Form(...), hour: int = Form(...), 
         if full:
             requested_names.append(full)
     if not requested_names:
-        raise HTTPException(status_code=400, detail="At least one name is required")
+        raise HTTPException(
+            status_code=400, detail="At least one name is required")
 
     with Session(engine) as session:
-        current = session.exec(select(Signup).where(Signup.day == day, Signup.hour == hour)).all()
+        current = session.exec(select(Signup).where(
+            Signup.day == day, Signup.hour == hour)).all()
         remaining = max(0, CAPACITY - len(current))
         if remaining <= 0:
             raise HTTPException(status_code=400, detail="This slot is full")
@@ -124,10 +176,9 @@ async def signup(request: Request, day: str = Form(...), hour: int = Form(...), 
 
 
 # Simple cookie-based session for admin
-from fastapi import Cookie
-from secrets import token_urlsafe
 
 SESSIONS: Dict[str, str] = {}
+
 
 def is_admin_session(session_id: Optional[str]) -> bool:
     return bool(session_id) and SESSIONS.get(session_id) == ADMIN_USERNAME
@@ -141,23 +192,37 @@ async def admin_page(request: Request, session_id: Optional[str] = Cookie(defaul
 
     # Show dashboard
     with Session(engine) as db:
-        data: Dict[str, Dict[int, List[Signup]]] = {d: {h: [] for h in HOURS} for d in DAYS}
+        signup_locked = get_setting(db, "signup_locked", "false") == "true"
+        lock_reason = get_setting(db, "lock_reason", "")
+
+        data: Dict[str, Dict[int, List[Signup]]] = {
+            d: {h: [] for h in HOURS} for d in DAYS}
         rows = db.exec(select(Signup)).all()
         for r in rows:
             if r.day in data and r.hour in data[r.day]:
                 data[r.day][r.hour].append(r)
-    return templates.TemplateResponse("admin_dashboard.html", {"request": request, "days": DAYS, "hours": HOURS, "data": data, "capacity": CAPACITY})
+    return templates.TemplateResponse("admin_dashboard.html", {
+        "request": request,
+        "days": DAYS,
+        "hours": HOURS,
+        "data": data,
+        "capacity": CAPACITY,
+        "signup_locked": signup_locked,
+        "lock_reason": lock_reason
+    })
 
 
 @app.post("/admin/login")
 async def admin_login(request: Request, username: str = Form(...), password: str = Form(...)):
     with Session(engine) as session:
-        admin = session.exec(select(Admin).where(Admin.username == username)).first()
+        admin = session.exec(select(Admin).where(
+            Admin.username == username)).first()
         if not admin or not pwd_context.verify(password, admin.password_hash):
             return templates.TemplateResponse("admin_login.html", {"request": request, "error": "Invalid credentials"})
         sid = token_urlsafe(32)
         SESSIONS[sid] = admin.username
-        response = RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+        response = RedirectResponse(
+            url="/admin", status_code=status.HTTP_303_SEE_OTHER)
         response.set_cookie("session_id", sid, httponly=True, samesite="lax")
         return response
 
@@ -194,11 +259,30 @@ async def admin_move_signup(signup_id: int = Form(...), day: str = Form(...), ho
         if not s:
             raise HTTPException(status_code=404, detail="Signup not found")
         # Capacity check excluding this signup
-        count = session.exec(select(Signup).where(Signup.day == day, Signup.hour == hour, Signup.id != signup_id)).all()
+        count = session.exec(select(Signup).where(
+            Signup.day == day, Signup.hour == hour, Signup.id != signup_id)).all()
         if len(count) >= CAPACITY:
             raise HTTPException(status_code=400, detail="Target slot is full")
         s.day = day
         s.hour = hour
         session.add(s)
         session.commit()
+    return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.post("/admin/update_settings")
+async def admin_update_settings(
+    signup_locked: Optional[str] = Form(None),
+    lock_reason: str = Form(""),
+    session_id: Optional[str] = Cookie(default=None)
+):
+    if not is_admin_session(session_id):
+        return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)
+
+    is_locked = "true" if signup_locked else "false"
+
+    with Session(engine) as session:
+        set_setting(session, "signup_locked", is_locked)
+        set_setting(session, "lock_reason", lock_reason)
+
     return RedirectResponse(url="/admin", status_code=status.HTTP_303_SEE_OTHER)

@@ -4,6 +4,48 @@ function fmtHour(h) {
   return `${t} ${suffix}`;
 }
 
+function initDayTabs() {
+  const tabs = Array.from(document.querySelectorAll('.day-tab'));
+  const panels = Array.from(document.querySelectorAll('.day-panel'));
+  if (tabs.length === 0) return;
+  const today = new Date().getDay(); // 0=Sun..6=Sat
+  const dayNames = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  let activeDay = dayNames[today] || 'Monday';
+  if (!tabs.some(t => t.dataset.day === activeDay)) activeDay = 'Monday';
+  function activate(day) {
+    tabs.forEach((t) => {
+      const isActive = t.dataset.day === day;
+      t.classList.toggle('active', isActive);
+      t.setAttribute('aria-selected', isActive ? 'true' : 'false');
+      t.setAttribute('tabindex', isActive ? '0' : '-1');
+    });
+    panels.forEach((p) => {
+      const isActive = p.dataset.day === day;
+      p.classList.toggle('active', isActive);
+      p.toggleAttribute('hidden', !isActive);
+    });
+    const activeTab = tabs.find(t => t.dataset.day === day);
+    if (activeTab && typeof activeTab.scrollIntoView === 'function') {
+      activeTab.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    }
+  }
+  tabs.forEach((t, index) => {
+    t.addEventListener('click', () => activate(t.dataset.day));
+    t.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+      event.preventDefault();
+      const dir = event.key === 'ArrowRight' ? 1 : -1;
+      const nextIndex = (index + dir + tabs.length) % tabs.length;
+      const nextTab = tabs[nextIndex];
+      if (nextTab) {
+        activate(nextTab.dataset.day);
+        nextTab.focus();
+      }
+    });
+  });
+  activate(activeDay);
+}
+
 function openModal(day, hour, maxPeople = 4) {
   const modal = document.getElementById('modal');
   const title = document.getElementById('modal-title');
@@ -29,9 +71,7 @@ function openModal(day, hour, maxPeople = 4) {
   modal.classList.remove('hidden');
 }
 
-function closeModal() {
-  document.getElementById('modal').classList.add('hidden');
-}
+function closeModal() { document.getElementById('modal').classList.add('hidden'); }
 
 function renderPeopleFields() {
   const container = document.getElementById('people-fields');
@@ -55,16 +95,30 @@ function renderPeopleFields() {
 }
 
 function attachHandlers() {
+  // Desktop grid buttons
   const grid = document.getElementById('signup-grid');
-  grid.addEventListener('click', (e) => {
-    const btn = e.target.closest('button.slot');
+  if (grid) {
+    grid.addEventListener('click', (e) => {
+      const btn = e.target.closest('button.slot');
+      if (!btn) return;
+      if (btn.getAttribute('aria-disabled') === 'true') return;
+      const available = btn.dataset.available === 'true';
+      const remaining = parseInt(btn.dataset.remaining || '0', 10);
+      if (!available || remaining <= 0) return;
+      const day = btn.dataset.day;
+      const hour = parseInt(btn.dataset.hour, 10);
+      openModal(day, hour, Math.min(4, remaining));
+    });
+  }
+
+  // Mobile signup buttons
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.signup-btn');
     if (!btn) return;
-    if (btn.getAttribute('aria-disabled') === 'true') return;
-    const available = btn.dataset.available === 'true';
-    const remaining = parseInt(btn.dataset.remaining || '0', 10);
-    if (!available || remaining <= 0) return;
+    if (btn.getAttribute('aria-disabled') === 'true' || btn.disabled) return;
     const day = btn.dataset.day;
     const hour = parseInt(btn.dataset.hour, 10);
+    const remaining = parseInt(btn.dataset.remaining || '0', 10);
     openModal(day, hour, Math.min(4, remaining));
   });
 
@@ -74,6 +128,7 @@ function attachHandlers() {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+  initDayTabs();
   attachHandlers();
-  renderPeopleFields(); // ensure initial render
+  renderPeopleFields();
 });
