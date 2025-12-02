@@ -17,7 +17,7 @@ build:
 	docker build -t $(APP_NAME) .
 
 run:
-	docker run --name $(APP_NAME) -p $(PORT):8000 -v "$(shell pwd)/app:/app/app" -d $(APP_NAME)
+	docker run --name $(APP_NAME) -p $(PORT):8000 -v "$(shell pwd)/app:/app/app" -d $(APP_NAME) uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 stop:
 	- docker stop $(APP_NAME) 2>/dev/null || true
