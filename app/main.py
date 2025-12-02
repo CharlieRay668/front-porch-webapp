@@ -30,7 +30,7 @@ ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
 
 DAYS = ["Monday", "Tuesday", "Wednesday",
         "Thursday", "Friday", "Saturday", "Sunday"]
-HOURS = list(range(7, 23))  # 7 to 23
+HOURS = list(range(7, 22))  # 7 to 23
 
 # Business rules for availability
 # Friday 7-16 (i.e., 4 pm), Sunday 9-17, Saturday unavailable
