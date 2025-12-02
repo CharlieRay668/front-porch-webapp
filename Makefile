@@ -17,7 +17,7 @@ build:
 	docker build -t $(APP_NAME) .
 
 run:
-	docker run --name $(APP_NAME) -p $(PORT):8000 -d $(APP_NAME)
+	docker run --name $(APP_NAME) -p $(PORT):8000 -v "$(shell pwd)/app:/app/app" -d $(APP_NAME)
 
 stop:
 	- docker stop $(APP_NAME) 2>/dev/null || true
